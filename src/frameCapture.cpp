@@ -31,14 +31,8 @@ Mat FrameCapture::captureFrame()
     return mat;
 }
 
-void FrameCapture::setUpCaptureFrame(int screenWidth, int screenHeight)
+void FrameCapture::setUpCaptureFrame()
 {
-    // Use true resolution
-    width = screenWidth / 3;
-    height = (screenHeight * 3) / 7; // Scale randomly chosen but it works lol
-    x = (screenWidth - width) / 2;
-    y = (screenHeight - height) / 2;
-
     overlayWidth = width;
     overlayHeight = height;
     overlayX = x;

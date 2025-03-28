@@ -48,7 +48,7 @@ public:
      */
     Mat captureFrame();
 
-void setUpCaptureFrame(int screenWidth, int screenHeight);
+    void setUpCaptureFrame();
 };
 
 #endif //FRAMECAPTURE_H

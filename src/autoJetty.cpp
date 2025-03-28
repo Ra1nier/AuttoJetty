@@ -28,10 +28,15 @@ int main()
     // Screen Setup
     getScreenDimensions();
 
+    width = screenWidth / 3;
+    height = (screenHeight * 3) / 7; // Scale randomly chosen but it works lol
+    x = (screenWidth - width) / 2;
+    y = (screenHeight - height) / 2;
+
     // Start JettyPlayer
     player = new JettyPlayer(width, height);
     frames = new FrameCapture(x, y, width, height);
-    frames->setUpCaptureFrame(screenWidth, screenHeight);
+    frames->setUpCaptureFrame();
 
     while (true)
     {
