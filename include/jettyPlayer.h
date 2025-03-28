@@ -5,7 +5,7 @@
 #ifndef JETTYPLAYER_H
 #define JETTYPLAYER_H
 
-#include <iostream>
+#include <windows.h>
 #include <vector>
 
 #include "opencv2/opencv.hpp"
@@ -15,17 +15,49 @@ using cv::Mat;
 
 class JettyPlayer
 {
-    private:
-        double bootHeight = 0.0;
-        double pillarTop = 0.0;
-        double pillarBottom = 0.0;
+private:
+    // JettyPlayer specific
+    double bootHeight = 0.0;
+    double pillarTop = 0.0;
+    double pillarBottom = 0.0;
 
-    public:
-        JettyPlayer();
-        ~JettyPlayer();
+    // External vars
+    int frameWidth = 0;
+    int frameHeight = 0;
 
-        void sendFrame(Mat frame);
+    /**
+     * Extracts the boot object from the frame.
+     *
+     * @param frame Frame captured from the screen.
+     * @return A Mat representing the mask of the boot.
+     */
+    Mat extractBoot(Mat frame);
 
+    /**
+     * Extracts the pillar objects from the frame.
+     *
+     * @param frame Frame captured from the screen.
+     * @return A Mat representing the mask of the pillars.
+     */
+    Mat extractPillars(Mat frame);
+
+    /**
+     * Sends the E Key to windows in order to jump the jet boot.
+     *
+     * @param releaseDelay Delay in milliseconds to release the key press.
+     */
+    void sendJump(int releaseDelay);
+
+public:
+    JettyPlayer(int width, int height);
+    ~JettyPlayer();
+
+    /**
+     * Sends the frame to the JettyBootPlayer for processing.
+     *
+     * @param frame Frame captured from the screen.
+     */
+    void sendFrame(Mat frame);
 };
 
 #endif //JETTYPLAYER_H
