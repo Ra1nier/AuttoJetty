@@ -46,10 +46,8 @@ Mat JettyPlayer::extractBoot(Mat frame)
     cv::cvtColor(frame.clone(), hsv, cv::COLOR_BGR2HSV);
 
     // Extract whitish values.
-    cv::Scalar lowerWhiteVal(120, 120, 120);
-    cv::Scalar upperWhiteVal(255, 255, 255);
     cv::Mat bootMask;
-    cv::inRange(hsv, lowerWhiteVal, upperWhiteVal, bootMask);
+    cv::threshold(hsv, bootMask, 235, 255, cv::THRESH_BINARY);
 
     return bootMask;
 }
@@ -61,8 +59,8 @@ Mat JettyPlayer::extractPillars(Mat frame)
     cv::cvtColor(frame.clone(), hsv, cv::COLOR_BGR2HSV);
 
     // Extract green values.
-    cv::Scalar lowerGreenVal(50, 100, 50);
-    cv::Scalar upperGreenVal(120, 255, 120);
+    cv::Scalar lowerGreenVal(50, 205, 34);
+    cv::Scalar upperGreenVal(110, 255, 94);
     cv::Mat pillarMask;
     cv::inRange(hsv, lowerGreenVal, upperGreenVal, pillarMask);
 

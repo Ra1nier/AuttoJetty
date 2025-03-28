@@ -35,7 +35,7 @@ void FrameCapture::setUpCaptureFrame(int screenWidth, int screenHeight)
 {
     // Use true resolution
     width = screenWidth / 3;
-    height = (screenHeight * 2) / 3;
+    height = (screenHeight * 3) / 7; // Scale randomly chosen but it works lol
     x = (screenWidth - width) / 2;
     y = (screenHeight - height) / 2;
 
