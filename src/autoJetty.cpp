@@ -31,7 +31,7 @@ int main()
     // Start JettyPlayer
     player = new JettyPlayer(width, height);
     frames = new FrameCapture(x, y, width, height);
-    frames->setUpCaptureFrame(screenWidth, screenHeight, x, y, width, height);
+    frames->setUpCaptureFrame(screenWidth, screenHeight);
 
     while (true)
     {
@@ -71,14 +71,4 @@ void getScreenDimensions()
     screenHeight = devmode.dmPelsHeight;
 
     cout << "Screen Resolution: " << screenWidth << "," << screenHeight << "\n";
-
-    // Get capture area top left coords
-    x = screenWidth / 2;
-    y = screenHeight / 2;
-
-    // Get capture area
-    width = screenWidth / 4;
-    height = screenHeight / 2;
-
-    cout << "Capture Area: "<< x << "," << y << ", " << width << "," << height << "\n";
 }

@@ -1,33 +1,26 @@
-//
-// Created by Max on 3/27/2025.
-//
-
 #include "../include/frameCapture.h"
 
-int overlayWidth;
-int overlayHeight;
+int overlayX, overlayY, overlayWidth, overlayHeight;
 
-FrameCapture::FrameCapture(int x, int y, int width, int height): x(x), y(y), width(width), height(height) {}
+FrameCapture::FrameCapture(int x = 0, int y = 0, int width = 0, int height = 0)
+    : x(x), y(y), width(width), height(height) {}
 
 FrameCapture::~FrameCapture() {}
 
 Mat FrameCapture::captureFrame()
 {
-    // Defines the screen device context
     HDC hdcScreen = GetDC(nullptr);
     HDC hdcMem = CreateCompatibleDC(hdcScreen);
-
-    // Creates a BitMap and assigns that as the drawing surface for the ScreenMem.
     HBITMAP hbmScreen = CreateCompatibleBitmap(hdcScreen, width, height);
     SelectObject(hdcMem, hbmScreen);
 
-    // Captures the specified screen area.
+    // Capture screen at correct coordinates
     BitBlt(hdcMem, 0, 0, width, height, hdcScreen, x, y, SRCCOPY);
 
-    // Convert the Captured BitMap into a Mat
+    // Convert to OpenCV Mat
     BITMAP bmp;
     GetObject(hbmScreen, sizeof(BITMAP), &bmp);
-    cv::Mat mat(bmp.bmHeight, bmp.bmWidth, CV_8UC4); //BGRA Format cause windows is weird
+    cv::Mat mat(bmp.bmHeight, bmp.bmWidth, CV_8UC4); 
     GetBitmapBits(hbmScreen, bmp.bmHeight * bmp.bmWidth * 4, mat.data);
 
     // Clean up
@@ -38,28 +31,29 @@ Mat FrameCapture::captureFrame()
     return mat;
 }
 
-void FrameCapture::setUpCaptureFrame(int screenWidth, int screenHeight, int x, int y, int captureWidth, int captureHeight)
+void FrameCapture::setUpCaptureFrame(int screenWidth, int screenHeight)
 {
-    // Get capture area top left coords
-    x = screenWidth / 2;
-    y = screenHeight / 2;
+    // Use true resolution
+    width = screenWidth / 3;
+    height = (screenHeight * 2) / 3;
+    x = (screenWidth - width) / 2;
+    y = (screenHeight - height) / 2;
 
-    // Get capture area
-    width = screenWidth / 4;
-    height = screenHeight / 2;
+    overlayWidth = width;
+    overlayHeight = height;
+    overlayX = x;
+    overlayY = y;
 
-    overlayWidth = captureWidth;
-    overlayHeight = captureHeight;
-
-    cout << "Capture Area: "<< x << "," << y << ", " << width << "," << height << "\n";
+    std::cout << "Capture Area: " << x << ", " << y << ", " << width << ", " << height << "\n";
+    std::cout << "Overlay Area: " << overlayX << ", " << overlayY << ", " << overlayWidth << ", " << overlayHeight << "\n";
 
     drawOverlay();
 }
 
-// Window procedure: Handles drawing and closing
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-    int borderThickness = 5;  // Thickness of the orange overlay
+    int borderThickness = 5;
 
     switch (uMsg)
     {
@@ -67,28 +61,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         {
             PAINTSTRUCT ps;
             HDC hdc = BeginPaint(hwnd, &ps);
-
-            // Create an orange brush
             HBRUSH hBrush = CreateSolidBrush(RGB(255, 128, 0));
 
-            // Draw only the border (leave the center transparent)
             RECT rect;
-
-            // Top border
-            rect = {0, 0, overlayWidth, borderThickness};
-            FillRect(hdc, &rect, hBrush);
-
-            // Bottom border
-            rect = {0, overlayHeight - borderThickness, overlayWidth, overlayHeight};
-            FillRect(hdc, &rect, hBrush);
-
-            // Left border
-            rect = {0, 0, borderThickness, overlayHeight};
-            FillRect(hdc, &rect, hBrush);
-
-            // Right border
-            rect = {overlayWidth - borderThickness, 0, overlayWidth, overlayHeight};
-            FillRect(hdc, &rect, hBrush);
+            rect = {0, 0, overlayWidth, borderThickness}; FillRect(hdc, &rect, hBrush);  // Top
+            rect = {0, overlayHeight - borderThickness, overlayWidth, overlayHeight}; FillRect(hdc, &rect, hBrush); // Bottom
+            rect = {0, 0, borderThickness, overlayHeight}; FillRect(hdc, &rect, hBrush); // Left
+            rect = {overlayWidth - borderThickness, 0, overlayWidth, overlayHeight}; FillRect(hdc, &rect, hBrush); // Right
 
             DeleteObject(hBrush);
             EndPaint(hwnd, &ps);
@@ -108,6 +87,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 void FrameCapture::drawOverlay()
 {
+    SetProcessDPIAware();
+
     const char CLASS_NAME[] = "TransparentOverlay";
     WNDCLASS wc = {};
     wc.lpfnWndProc = WindowProc;
@@ -115,21 +96,12 @@ void FrameCapture::drawOverlay()
     wc.lpszClassName = CLASS_NAME;
     RegisterClass(&wc);
 
-    // Get screen dimensions
-    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-
-    // Calculate centered position
-    int x = (screenWidth - width) / 2;
-    int y = (screenHeight - height) / 2;
-
-    // Create layered, topmost, transparent window
     HWND hwnd = CreateWindowEx(
-        WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TRANSPARENT,  // Transparent overlay
+        WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TRANSPARENT,
         CLASS_NAME,
         "Overlay Window",
-        WS_POPUP,  // No borders/title
-        x, y, width, height,  // Centered position
+        WS_POPUP,
+        overlayX, overlayY, overlayWidth, overlayHeight,
         NULL, NULL, GetModuleHandle(NULL), NULL);
 
     if (!hwnd)
@@ -138,46 +110,29 @@ void FrameCapture::drawOverlay()
         return;
     }
 
-    // Make the background fully transparent
     SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 255, LWA_COLORKEY);
-
-    // Show the overlay
     ShowWindow(hwnd, SW_SHOW);
 
-    // Display Instructions
-    cout << "There should be an orange box on your screen. Align the Jetty Boot game within the orange box, then press 'G' to start or 'Q' to quit." << std::endl;
+    cout << "Orange box displayed. Please align JettBoot inside the orange frame, then press 'G' to start AutoJetty." << std::endl;
     bool start = false;
     MSG msg = {};
 
-    // Main loop: process Windows messages & check for user input
     while (!start)
     {
-        // Process Windows messages (keeps overlay running)
         while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
         {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
-
-            // Exit if window is closed
-            if (msg.message == WM_QUIT)
-                return;
+            if (msg.message == WM_QUIT) return;
         }
 
-        // Check for key press
         if (_kbhit())
         {
             char keyPressed = _getch();
-            switch (keyPressed)
+            if (keyPressed == 'g')
             {
-                case 'g':
-                    cout << "Starting... Press 'Q' to stop program." << std::endl;
+                cout << "Starting..." << std::endl;
                 start = true;
-                break;
-                case 'q':
-                    cout << "Exiting..." << std::endl;
-                return;
-                default:
-                    break;
             }
         }
     }
