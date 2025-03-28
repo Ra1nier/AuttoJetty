@@ -12,6 +12,7 @@
 
 using std::vector;
 using cv::Mat;
+using cv::Rect;
 
 class JettyPlayer
 {
@@ -40,6 +41,12 @@ private:
      * @return A Mat representing the mask of the pillars.
      */
     Mat extractPillars(Mat frame);
+
+    Rect getBootPosition(Mat bootFrame);
+
+    vector<Rect> getPillarGapPosition(Mat pillarFrame);
+
+    Rect calculatePillarGap(Rect& boot, vector<Rect> pillars);
 
     /**
      * Sends the E Key to windows in order to jump the jet boot.
