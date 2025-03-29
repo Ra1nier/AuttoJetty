@@ -14,14 +14,6 @@ void JettyPlayer::sendFrame(Mat frame)
     Mat boot = extractBoot(frame);
     Mat pillars = extractPillars(frame);
 
-    // TODO: Remove (Just for debug), Show extracted boot frame
-    // cv::imshow("Boot Frame", boot);
-    // cv::waitKey(0);
-
-    // TODO: Remove (Just for debug), Show Extracted pillar frame
-    // cv::imshow("Pillar Frame", pillars);
-    // cv::waitKey(0);
-
     // Jump Calculations from the pillars and boot position
     Rect bootPosition = getBootPosition(boot);
     vector<Rect> pillarGapPositions = getPillarGapPosition(pillars);
@@ -33,6 +25,8 @@ void JettyPlayer::sendFrame(Mat frame)
 
     Rect gap = calculatePillarGap(bootPosition, pillarGapPositions);
 
+    decideNextMove(gap, bootPosition);
+
     // TODO: Remove (Just For Debug), Show extracted positions
     Mat positionFrame = frame.clone();
     cv::rectangle(positionFrame, bootPosition, cv::Scalar(0, 0, 255), 2);  // Red for boot
@@ -42,7 +36,7 @@ void JettyPlayer::sendFrame(Mat frame)
     }
     cv::rectangle(positionFrame, gap, cv::Scalar(255, 0, 0), 2); // blue for gap
     cv::imshow("Detected Objects", positionFrame);
-    if (cv::waitKey(1) == 27) return;
+    cv::waitKey(1);
 }
 
 Rect JettyPlayer::getBootPosition(Mat bootFrame)
@@ -52,7 +46,6 @@ Rect JettyPlayer::getBootPosition(Mat bootFrame)
     cv::findContours(bootFrame, boot, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
     if (boot.empty())
     {
-        std::cerr << "Error: No boot detected!" << std::endl;
         return cv::Rect();
     }
 
@@ -69,7 +62,6 @@ vector<Rect> JettyPlayer::getPillarGapPosition(Mat pillarFrame)
 
     if (pillars.empty())
     {
-        std::cerr << "Error: No pillars detected!" << std::endl;
         return pillarPositions;
     }
 
@@ -85,7 +77,7 @@ Rect JettyPlayer::calculatePillarGap(Rect &boot, vector<Rect> pillars)
 {
     if (pillars.size() < 2) return Rect();
 
-    int bootCenterX = boot.x + boot.width / 2;
+    int bootCenterX = (boot.x + boot.width);
 
     // Sort pillars by x (left to right)
     std::sort(pillars.begin(), pillars.end(), [](const Rect &a, const Rect &b) { return a.x < b.x; });
@@ -115,22 +107,48 @@ Rect JettyPlayer::calculatePillarGap(Rect &boot, vector<Rect> pillars)
     int gapWidth = bottomPillar.width;
     int gapHeight = bottomPillar.y - gapY;
 
+    // Make rect and add gap padding
     return Rect(gapX, gapY, gapWidth, gapHeight);
 }
 
-
-void JettyPlayer::sendJump(int releaseDelay)
+void JettyPlayer::decideNextMove(Rect &gap, Rect &boot)
 {
-    // Send E Key Press
-    INPUT input = { 0 };
-    input.type = INPUT_KEYBOARD;
-    input.ki.wVk = 0x45; // E Key to jump.
-    SendInput(1, &input, sizeof(INPUT));
+    int padding = 50;
+    static int prevBootY = boot.y;
+    static int maintainJumps = 0;
 
-    // Release key after delay
-    Sleep(releaseDelay);
-    input.ki.dwFlags = KEYEVENTF_KEYUP;
-    SendInput(1, &input, sizeof(INPUT));
+    // Calculate fall speed
+    int fallSpeed = std::abs(boot.y - prevBootY);
+    prevBootY = boot.y;
+
+    // Define the gap
+    int gapTop = gap.y;
+    int gapBottom = gap.y + gap.height;
+
+    // Decide move
+    int jumpStrength = 0;
+    if (boot.y > gapBottom - padding) // Boot is too low -> High Jump
+    {
+        jumpStrength = std::min(50 + fallSpeed * 2, 200);
+        std::cout << "High Jump: " << jumpStrength << std::endl;
+    }
+    else if (boot.y < gapTop + padding) // Boot is too high -> No Jump
+    {
+        jumpStrength = 0;
+        std::cout << "No Jump: Too High!" << std::endl;
+    }
+    else if (fallSpeed > 5 && maintainJumps == 2) // Boot is in within bounds of safe zone -> Small Correction jump
+    {
+        jumpStrength = 20;
+        maintainJumps = 0;
+        std::cout << "No Jump: Within Bounds" << std::endl;
+    }
+    maintainJumps++;
+
+    if (jumpStrength > 0)
+    {
+        sendJump(jumpStrength);
+    }
 }
 
 Mat JettyPlayer::extractBoot(Mat frame)
@@ -144,6 +162,19 @@ Mat JettyPlayer::extractBoot(Mat frame)
     cv::threshold(hsv, bootMask, 235, 255, cv::THRESH_BINARY);
 
     return bootMask;
+}
+
+void JettyPlayer::sendJump(int releaseDelay)
+{
+    INPUT input = { 0 };
+    input.type = INPUT_KEYBOARD;
+    input.ki.wVk = 0x45; // E Key
+    SendInput(1, &input, sizeof(INPUT));
+
+    Sleep(releaseDelay / 3);  // Tiny pause before next tap
+
+    input.ki.dwFlags = KEYEVENTF_KEYUP;
+    SendInput(1, &input, sizeof(INPUT));
 }
 
 Mat JettyPlayer::extractPillars(Mat frame)

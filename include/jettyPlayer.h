@@ -21,6 +21,7 @@ private:
     double bootHeight = 0.0;
     double pillarTop = 0.0;
     double pillarBottom = 0.0;
+    int prevBootY = 0;
 
     // External vars
     int frameWidth = 0;
@@ -47,6 +48,8 @@ private:
     vector<Rect> getPillarGapPosition(Mat pillarFrame);
 
     Rect calculatePillarGap(Rect& boot, vector<Rect> pillars);
+
+    void decideNextMove(Rect& gap, Rect& boot);
 
     /**
      * Sends the E Key to windows in order to jump the jet boot.
