@@ -14,6 +14,11 @@ void JettyPlayer::sendFrame(Mat frame)
     Mat boot = extractBoot(frame);
     Mat pillars = extractPillars(frame);
 
+    // Combine Mats and display result
+    Mat resultFrame;
+    cv::hconcat(boot, pillars, resultFrame);
+    // imshow("Combined Frames", resultFrame);
+
     // Jump Calculations from the pillars and boot position
     Rect bootPosition = getBootPosition(boot);
     vector<Rect> pillarGapPositions = getPillarGapPosition(pillars);
@@ -77,7 +82,7 @@ Rect JettyPlayer::calculatePillarGap(Rect &boot, vector<Rect> pillars)
 {
     if (pillars.size() < 2) return Rect();
 
-    int bootCenterX = (boot.x + boot.width);
+    int bootCenterX = boot.x + (boot.width / 2);
 
     // Sort pillars by x (left to right)
     std::sort(pillars.begin(), pillars.end(), [](const Rect &a, const Rect &b) { return a.x < b.x; });
@@ -85,7 +90,7 @@ Rect JettyPlayer::calculatePillarGap(Rect &boot, vector<Rect> pillars)
     vector<Rect> nextPillarPair;
     for (size_t i = 0; i < pillars.size() - 1; i++)
     {
-        if (pillars[i].x >= bootCenterX)
+        if (pillars[i].x + pillars[i].width >= bootCenterX)
         {
             nextPillarPair.push_back(pillars[i]);
             nextPillarPair.push_back(pillars[i + 1]);
@@ -127,7 +132,7 @@ void JettyPlayer::decideNextMove(Rect &gap, Rect &boot)
 
     // Decide move
     int jumpStrength = 0;
-    if (boot.y > gapBottom - padding) // Boot is too low -> High Jump
+    if ((boot.y + padding / 2) > gapBottom - padding) // Boot is too low -> High Jump
     {
         jumpStrength = std::min(50 + fallSpeed * 2, 200);
         std::cout << "High Jump: " << jumpStrength << std::endl;
