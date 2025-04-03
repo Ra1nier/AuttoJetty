@@ -118,13 +118,14 @@ Rect JettyPlayer::calculatePillarGap(Rect &boot, vector<Rect> pillars)
 
 void JettyPlayer::decideNextMove(Rect &gap, Rect &boot)
 {
-    int padding = 50;
+    int padding = 60;
     static int prevBootY = boot.y;
     static int maintainJumps = 0;
 
     // Calculate fall speed
-    int fallSpeed = std::abs(boot.y - prevBootY);
-    prevBootY = boot.y;
+    int bootPositionY = boot.y + boot.height / 2;
+    int fallSpeed = std::abs(bootPositionY - prevBootY);
+    prevBootY = bootPositionY;
 
     // Define the gap
     int gapTop = gap.y;
@@ -132,21 +133,21 @@ void JettyPlayer::decideNextMove(Rect &gap, Rect &boot)
 
     // Decide move
     int jumpStrength = 0;
-    if ((boot.y + padding / 2) > gapBottom - padding) // Boot is too low -> High Jump
+    if (bootPositionY > gapBottom - padding) // Boot is too low -> High Jump
     {
-        jumpStrength = std::min(50 + fallSpeed * 2, 200);
+        jumpStrength = std::min(25 + fallSpeed * 2, 200);
         std::cout << "High Jump: " << jumpStrength << std::endl;
     }
-    else if (boot.y < gapTop + padding) // Boot is too high -> No Jump
+    else if (bootPositionY < gapTop + padding) // Boot is too high -> No Jump
     {
         jumpStrength = 0;
         std::cout << "No Jump: Too High!" << std::endl;
     }
-    else if (fallSpeed > 5 && maintainJumps == 2) // Boot is in within bounds of safe zone -> Small Correction jump
+    else if (fallSpeed > 7 && maintainJumps == 1) // Boot is in within bounds of safe zone -> Small Correction jump
     {
-        jumpStrength = 20;
+        jumpStrength = 30;
         maintainJumps = 0;
-        std::cout << "No Jump: Within Bounds" << std::endl;
+        std::cout << "Maintaining Position: Within Bounds" << std::endl;
     }
     maintainJumps++;
 
