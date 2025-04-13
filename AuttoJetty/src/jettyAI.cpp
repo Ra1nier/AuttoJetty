@@ -21,7 +21,7 @@ Tensor JettyAIImpl::forward(Tensor x)
 
 // JettyBot is a class that contains the AI model and is used to interact with the JettyAI. Essentially, it is a wrapper for the JettyAI.
 JettyBot::JettyBot(bool train, bool save)
-	: trainAI(train), saveAI(save)
+	: trainAI(train), saveAI(save), livesLeft(3)
 {
 	model = JettyAI();
 	if (train)
@@ -51,6 +51,7 @@ int JettyBot::train(Tensor input)
 
 	// Randomize the action to add some noise for training
 	action = action + torch::randn_like(action) * 10.0;
+	action = torch::clamp(action, 0, 200);
 
 	episodes.emplace_back(input.clone(), action.clone());
 
@@ -116,22 +117,29 @@ void JettyBot::recordAliveReward()
 	}
 }
 
-void JettyBot::recordCrash()
+void JettyBot::recordCrash(int lives)
 {
-	if (!episodes.empty())
+	// Apply -1000 reward to the *last N steps*, not just the last frame.
+	const int blameWindow = 3;
+	int startIdx = std::max(0, (int)episodes.size() - blameWindow);
+	for (int i = startIdx; i < (int)episodes.size(); ++i)
 	{
-		episodes.back().reward -= 1000.0f;
-		totalReward -= 1000.0f;
+		episodes[i].reward -= 1000.0f / blameWindow;
+		totalReward -= 1000.0f / blameWindow;
 	}
 
-	livesLeft--;
+	livesLeft = lives;
+
+	std::cout << "[AI] Crash recorded. Lives left: " << livesLeft << std::endl;
 
 	if (livesLeft <= 0)
 	{
+		std::cout << "[AI] Episode over. Reward: " << totalReward << std::endl;
 		finalizeEpisode();
 		reset();
 	}
 }
+
 
 void JettyBot::reset()
 {

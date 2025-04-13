@@ -8,6 +8,8 @@ JettyPlayer::JettyPlayer(int width, int height, bool train, bool save, bool rest
 	: frameWidth(width), frameHeight(height), trainAI(train), saveAI(save)
 {
 	jettyBot = new JettyBot(trainAI, saveAI);
+	runStartTime = std::chrono::steady_clock::now();
+	readyToTrain = false;
 
 	if (restore)
 	{
@@ -22,6 +24,21 @@ JettyPlayer::~JettyPlayer()
 
 void JettyPlayer::sendFrame(Mat gameFrame, Mat stateFrame)
 {
+	using namespace std::chrono;
+	auto now = steady_clock::now();
+	double elapsedSeconds = duration_cast<duration<double>>(now - runStartTime).count();
+
+	if (!readyToTrain && elapsedSeconds < 1.5)
+	{
+		std::cout << "[System] Waiting for game to start (" << elapsedSeconds << "s)" << std::endl;
+		return; // Skip frame
+	}
+	else if (!readyToTrain)
+	{
+		readyToTrain = true;
+		std::cout << "[System] AI training active!" << std::endl;
+	}
+
 	// Get necessary game components.
 	Mat boot = extractBoot(gameFrame);
 	Mat pillars = extractPillars(gameFrame);
@@ -37,9 +54,10 @@ void JettyPlayer::sendFrame(Mat gameFrame, Mat stateFrame)
 
 	Rect gap = calculatePillarGap(bootPosition, pillarGapPositions);
 
-	int livesLeft = getLivesLeft(stateFrame);
+	vector<Rect> lives = getLivesLeft(stateFrame);
+	int livesLeft = std::min(3, (int)lives.size());
 	decideNextMove(gap, bootPosition, livesLeft);
-	drawPreview(gameFrame, bootPosition, pillarGapPositions, gap);
+	drawPreview(gameFrame, stateFrame, bootPosition, pillarGapPositions, gap, lives);
 }
 
 Rect JettyPlayer::getBootPosition(Mat bootFrame)
@@ -114,7 +132,7 @@ Rect JettyPlayer::calculatePillarGap(Rect& boot, vector<Rect> pillars)
 	return Rect(gapX, gapY, gapWidth, gapHeight);
 }
 
-int JettyPlayer::getLivesLeft(Mat stateFrame)
+vector<Rect> JettyPlayer::getLivesLeft(Mat stateFrame)
 {
 	cv::Mat hsv;
 	cv::cvtColor(stateFrame.clone(), hsv, cv::COLOR_BGR2HSV);
@@ -126,38 +144,37 @@ int JettyPlayer::getLivesLeft(Mat stateFrame)
 	cv::Mat livesMask;
 	cv::inRange(hsv, lowerGreenVal, upperGreenVal, livesMask);
 
+	// Merge contours to get the number of lives left
+	cv::Mat cleaned;
+	cv::morphologyEx(livesMask, cleaned, cv::MORPH_CLOSE, cv::Mat(), cv::Point(-1, -1), 2);
+
 	// Get the number of contours
 	vector<vector<cv::Point>> lives;
 	Mat hierarchy;
-	cv::findContours(livesMask, lives, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-	std::cout << "You have " << lives.size() << " lives left." << std::endl;
+	cv::findContours(cleaned, lives, hierarchy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
-	vector<Rect> lifePos;
+	// Filter contours by area to remove small noise.
+	vector<Rect> lifeBoots;
 	for (auto life : lives)
 	{
-		lifePos.push_back(cv::boundingRect(life));
+		double area = cv::contourArea(life);
+		if (area < 200.0 || area > 1000.0)
+		{
+			continue;
+		}
+
+		lifeBoots.push_back(cv::boundingRect(life));
 	}
 
-	for (auto life : lifePos)
-	{
-		cv::rectangle(stateFrame, life, cv::Scalar(255, 0, 0), 2); // Green for pillar
-	}
-	cv::imshow("Detected Lifes", stateFrame);
-
-	return lives.size();
+	return lifeBoots;
 }
 
 void JettyPlayer::decideNextMove(Rect& gap, Rect& boot, int livesLeft)
 {
-	if (livesLeft == 0)
-	{
-		return;
-	}
-
 	static int prevBootY = boot.y;
 
 	// Calculate fall speed
-	int bootPositionY = boot.y + boot.height / 2;
+	int bootPositionY = boot.y + (boot.height / 2);
 	int fallSpeed = std::abs(bootPositionY - prevBootY);
 	prevBootY = bootPositionY;
 
@@ -165,15 +182,18 @@ void JettyPlayer::decideNextMove(Rect& gap, Rect& boot, int livesLeft)
 	int gapTop = gap.y;
 	int gapBottom = gap.y + gap.height;
 
-	int jumpTime = jettyBot->getJumpTime(bootPositionY, gapTop, gapBottom, fallSpeed);
-	sendJump(jumpTime);
+	if (livesLeft > 0)
+	{
+		int jumpTime = jettyBot->getJumpTime(bootPositionY, gapTop, gapBottom, fallSpeed);
+		sendJump(jumpTime);
+	}
 
 	// Update JettyBot with the game state if we are training.
 	if (trainAI)
 	{
 		if (livesLeft < previousLives)
 		{
-			jettyBot->recordCrash();
+			jettyBot->recordCrash(livesLeft);
 		}
 		else
 		{
@@ -182,21 +202,21 @@ void JettyPlayer::decideNextMove(Rect& gap, Rect& boot, int livesLeft)
 
 		previousLives = livesLeft;
 	}
-
 }
 
 void JettyPlayer::sendJump(int releaseDelay)
 {
-	INPUT input = { 0 };
-	input.type = INPUT_KEYBOARD;
-	input.ki.wVk = 0x45; // E Key
-	SendInput(1, &input, sizeof(INPUT));
-
-	Sleep(releaseDelay / 3);  // Tiny pause before next tap
-
-	input.ki.dwFlags = KEYEVENTF_KEYUP;
-	SendInput(1, &input, sizeof(INPUT));
+	std::thread([releaseDelay]() {
+		INPUT input = { 0 };
+		input.type = INPUT_KEYBOARD;
+		input.ki.wVk = 0x45; // E Key
+		SendInput(1, &input, sizeof(INPUT));
+		Sleep(releaseDelay / 3);
+		input.ki.dwFlags = KEYEVENTF_KEYUP;
+		SendInput(1, &input, sizeof(INPUT));
+		}).detach();
 }
+
 
 Mat JettyPlayer::extractBoot(Mat frame)
 {
@@ -226,14 +246,47 @@ Mat JettyPlayer::extractPillars(Mat frame)
 	return pillarMask;
 }
 
-void JettyPlayer::drawPreview(Mat frame, Rect boot, vector<Rect> pillarGaps, Rect gap)
+void JettyPlayer::drawPreview(Mat gameFrame, Mat stateFrame, Rect boot, vector<Rect> pillarGaps, Rect gap, vector<Rect> lives)
 {
-	cv::rectangle(frame, boot, cv::Scalar(0, 0, 255), 2);  // Red for boot
+	// Boot
+	cv::rectangle(gameFrame, boot, cv::Scalar(0, 0, 255), 2);  // Red for boot
+	cv::circle(gameFrame, cv::Point(boot.x + (boot.width / 2), boot.y + (boot.height / 2)), 5, cv::Scalar(0, 255, 255)); // Yellow for boot center
+
+	// Pillars
 	for (auto pillar : pillarGaps)
 	{
-		cv::rectangle(frame, pillar, cv::Scalar(0, 255, 0), 2); // Green for pillar
+		cv::rectangle(gameFrame, pillar, cv::Scalar(0, 255, 0), 2); // Green for pillar
 	}
-	cv::rectangle(frame, gap, cv::Scalar(255, 0, 0), 2); // blue for gap
-	cv::imshow("Detected Objects", frame);
+	cv::rectangle(gameFrame, gap, cv::Scalar(255, 0, 0), 2); // blue for gap
+
+	// Lives
+	if (!stateFrame.empty())
+	{
+		for (auto life : lives)
+		{
+			cv::rectangle(stateFrame, life, cv::Scalar(255, 0, 0), 2); // Green for pillar
+		}
+
+		cv::Mat resizedState;
+		cv::resize(stateFrame, resizedState, cv::Size(gameFrame.cols, stateFrame.rows * gameFrame.cols / stateFrame.cols));
+
+		// Combine horizontally
+		cv::Mat combined;
+		cv::vconcat(gameFrame, resizedState, combined);
+
+		cv::imshow("Detected Objects", combined);
+		cv::moveWindow("Detected Objects", 0, 0);
+		makeWindowAlwaysOnTop("Detected Objects");
+	}
 	cv::waitKey(1);
+}
+
+void makeWindowAlwaysOnTop(const std::string& windowName)
+{
+	HWND hwnd = FindWindowA(NULL, windowName.c_str());
+	if (hwnd != nullptr)
+	{
+		SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+			SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+	}
 }

@@ -45,7 +45,7 @@ class JettyBot
         void generateReward(bool crash);
 
         void recordAliveReward();
-        void recordCrash();
+        void recordCrash(int lives);
 		void finalizeEpisode();
 
         void close();

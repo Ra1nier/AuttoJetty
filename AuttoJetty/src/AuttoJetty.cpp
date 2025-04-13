@@ -37,7 +37,7 @@ int main()
     getScreenDimensions();
 
     width = screenWidth / 3;
-    height = (screenHeight * 3) / 7; // Scale randomly chosen but it works lol
+    height = (screenHeight * 4) / 11; // Scale randomly chosen but it works lol
     x = (screenWidth - width) / 2;
     y = (screenHeight - height) / 2;
 

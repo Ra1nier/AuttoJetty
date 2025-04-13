@@ -71,11 +71,13 @@ void FrameCapture::setUpCaptureFrame()
 
     // State capture region.
 	stateWidth = width / 4;
-	stateHeight = height / 8;
+	stateHeight = height / 9;
 	stateOverlayWidth = stateWidth;
 	stateOverlayHeight = stateHeight;
-	stateOverlayX = x + 100;
-	stateOverlayY = y - 100;
+	stateX = x + 100;
+	stateY = y - 100;
+	stateOverlayX = stateX;
+	stateOverlayY = stateY;
 
     drawOverlay();
 }

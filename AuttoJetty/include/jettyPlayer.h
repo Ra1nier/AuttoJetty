@@ -7,6 +7,8 @@
 
 #include <windows.h>
 #include <vector>
+#include <thread>
+#include <opencv2/highgui.hpp>
 
 #include "opencv2/opencv.hpp"
 #include "jettyAI.h"
@@ -14,6 +16,8 @@
 using std::vector;
 using cv::Mat;
 using cv::Rect;
+
+void makeWindowAlwaysOnTop(const std::string& windowName);
 
 class JettyPlayer
 {
@@ -33,6 +37,8 @@ private:
 	bool gameOver = false;
 	bool trainAI = false;
     bool saveAI = false;
+    std::chrono::steady_clock::time_point runStartTime;
+    bool readyToTrain = false;
 
     /**
      * Extracts the boot object from the frame.
@@ -56,7 +62,7 @@ private:
 
     Rect calculatePillarGap(Rect& boot, vector<Rect> pillars);
 
-	int getLivesLeft(Mat stateFrame);
+    vector<Rect> getLivesLeft(Mat stateFrame);
 
     void decideNextMove(Rect& gap, Rect& boot, int livesLeft);
 
@@ -67,7 +73,7 @@ private:
      */
     void sendJump(int releaseDelay);
 
-    void drawPreview(Mat frame, Rect boot, vector<Rect> pillarGaps, Rect gap);
+    void drawPreview(Mat gameFrame, Mat stateFrame, Rect boot, vector<Rect> pillarGaps, Rect gap, vector<Rect> lives);
 
 public:
     JettyPlayer(int width, int height, bool train, bool save, bool restore);
