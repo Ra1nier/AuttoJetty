@@ -21,16 +21,18 @@ class FrameCapture
 private:
     int x, y = 0;
     int stateX, stateY = 0;
+	int overX, overY = 0;
 
     void drawOverlay();
-    void drawStateOverlay();
 
     Mat captureGameFrame();
     Mat captureGameState();
+    Mat captureGameOver();
 
 public:
     int width, height = 0;
     int stateWidth, stateHeight = 0;
+    int overHeight, overWidth = 0;
 
     /**
      * Constructor for the FrameCapture Class.

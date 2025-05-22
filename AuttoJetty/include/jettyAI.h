@@ -45,6 +45,7 @@ class JettyBot
         void generateReward(bool crash);
 
         void recordAliveReward();
+        void recordScoreReward(int scoreGained);
         void recordCrash(int lives);
 		void finalizeEpisode();
 
@@ -59,7 +60,6 @@ class JettyBot
         bool trainAI = false;
         bool saveAI = false;
         bool gameOver = false;
-        int livesLeft = 3;
 		float totalReward = 0.0f;
 
         int train(Tensor data);

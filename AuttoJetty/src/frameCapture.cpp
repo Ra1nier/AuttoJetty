@@ -61,6 +61,7 @@ Mat FrameCapture::captureGameState()
     return mat;
 }
 
+// TODO: ALL of this code is obviously only relevant to my display and needs to be updated to using some sort of scaling based on the display. 
 void FrameCapture::setUpCaptureFrame()
 {
     // Main capture region.
@@ -75,7 +76,7 @@ void FrameCapture::setUpCaptureFrame()
 	stateOverlayWidth = stateWidth;
 	stateOverlayHeight = stateHeight;
 	stateX = x + 100;
-	stateY = y - 100;
+	stateY = y - 50;
 	stateOverlayX = stateX;
 	stateOverlayY = stateY;
 
@@ -162,6 +163,23 @@ void FrameCapture::drawOverlay()
 
     SetLayeredWindowAttributes(stateHwnd, RGB(0, 0, 0), 255, LWA_COLORKEY);
     ShowWindow(stateHwnd, SW_SHOW);
+
+    HWND overHwnd = CreateWindowEx(
+        WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TRANSPARENT,
+        CLASS_NAME,
+        L"Game Over Overlay Window",
+        WS_POPUP,
+        overX, overY, overWidth, overHeight,
+        NULL, NULL, GetModuleHandle(NULL), NULL);
+
+    if (!overHwnd)
+    {
+        MessageBox(NULL, L"Failed to create game over overlay window!", L"Error", MB_OK);
+        return;
+    }
+
+    SetLayeredWindowAttributes(overHwnd, RGB(0, 0, 0), 255, LWA_COLORKEY);
+    ShowWindow(overHwnd, SW_SHOW);
 
     cout << "Orange box displayed. Please align JettBoot inside the orange frame, then press 'G' to start AutoJetty." << std::endl;
     bool start = false;

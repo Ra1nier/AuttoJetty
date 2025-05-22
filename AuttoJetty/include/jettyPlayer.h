@@ -28,6 +28,7 @@ private:
     double pillarBottom = 0.0;
     int prevBootY = 0;
     int previousLives = 3;
+    int previousScore = 0;
 
     // External vars
     int frameWidth = 0;
@@ -60,11 +61,15 @@ private:
 
     vector<Rect> getPillarGapPosition(Mat pillarFrame);
 
+    int getScoreFromFrame(cv::Mat stateFrame);
+
     Rect calculatePillarGap(Rect& boot, vector<Rect> pillars);
 
     vector<Rect> getLivesLeft(Mat stateFrame);
 
-    void decideNextMove(Rect& gap, Rect& boot, int livesLeft);
+    int getStableLives(int currentLives);
+
+    void decideNextMove(Rect& gap, Rect& boot);
 
     /**
      * Sends the E Key to windows in order to jump the jet boot.

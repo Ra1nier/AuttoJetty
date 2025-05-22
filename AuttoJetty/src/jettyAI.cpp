@@ -21,7 +21,7 @@ Tensor JettyAIImpl::forward(Tensor x)
 
 // JettyBot is a class that contains the AI model and is used to interact with the JettyAI. Essentially, it is a wrapper for the JettyAI.
 JettyBot::JettyBot(bool train, bool save)
-	: trainAI(train), saveAI(save), livesLeft(3)
+	: trainAI(train), saveAI(save)
 {
 	model = JettyAI();
 	if (train)
@@ -128,11 +128,9 @@ void JettyBot::recordCrash(int lives)
 		totalReward -= 1000.0f / blameWindow;
 	}
 
-	livesLeft = lives;
+	std::cout << "[AI] Crash recorded. Lives left: " << lives << std::endl;
 
-	std::cout << "[AI] Crash recorded. Lives left: " << livesLeft << std::endl;
-
-	if (livesLeft <= 0)
+	if (lives <= 0)
 	{
 		std::cout << "[AI] Episode over. Reward: " << totalReward << std::endl;
 		finalizeEpisode();
@@ -140,10 +138,18 @@ void JettyBot::recordCrash(int lives)
 	}
 }
 
+void JettyBot::recordScoreReward(int scoreGained)
+{
+	float reward = scoreGained * 10.0f;
+	if (!episodes.empty())
+	{
+		episodes.back().reward += reward;
+		totalReward += reward;
+	}
+}
 
 void JettyBot::reset()
 {
-	livesLeft = 3;
 	totalReward = 0.0f;
 	episodes.clear();
 }
