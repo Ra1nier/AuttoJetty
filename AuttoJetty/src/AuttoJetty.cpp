@@ -3,8 +3,13 @@
 //
 
 #include <iostream>
-#include <conio.h>
-#include <windows.h>
+#include <cctype>
+#include <cstdlib>
+#include <termios.h>
+#include <unistd.h>
+#include <sys/select.h>
+
+#include <X11/Xlib.h>
 
 #include "opencv2/opencv.hpp"
 #include "../include/frameCapture.h"
@@ -18,6 +23,8 @@ using std::string;
 void getScreenDimensions();
 void requestUserSettings();
 bool displayRequest(string message, char acceptKey, char rejectKey);
+bool keyPressed();
+char readKey();
 
 // System vals
 int x = 0, y = 0;
@@ -61,9 +68,9 @@ int main()
         player->sendFrame(gameFrame, stateFrame);
 
         // Exit app on Q
-        if (_kbhit())
+        if (keyPressed())
         {
-            if (_getch() == 'q')
+            if (readKey() == 'q')
             {
                 cout << "Exiting..." << std::endl;
                 break;
@@ -79,11 +86,17 @@ int main()
 
 void getScreenDimensions()
 {
-    // Get Display resolution without the screen scaling affecting it
-    DEVMODE devmode;
-    EnumDisplaySettings(NULL, ENUM_CURRENT_SETTINGS, &devmode);
-    screenWidth = devmode.dmPelsWidth;
-    screenHeight = devmode.dmPelsHeight;
+    Display* display = XOpenDisplay(nullptr);
+    if (!display)
+    {
+        std::cerr << "Failed to open X11 display. Make sure DISPLAY is set and you are running under X11/XWayland." << std::endl;
+        std::exit(1);
+    }
+
+    int screen = DefaultScreen(display);
+    screenWidth = DisplayWidth(display, screen);
+    screenHeight = DisplayHeight(display, screen);
+    XCloseDisplay(display);
 
     cout << "Screen Resolution: " << screenWidth << "," << screenHeight << "\n";
 }
@@ -104,11 +117,47 @@ void requestUserSettings()
 
 bool displayRequest(string message, char acceptKey, char rejectKey)
 {
+    char key = '\0';
     do
     {
         cout << message << std::endl;
-    } while (_kbhit() && !(_getch() == acceptKey || _getch() == rejectKey));
+        std::cin >> key;
+        key = static_cast<char>(std::tolower(static_cast<unsigned char>(key)));
+    } while (key != acceptKey && key != rejectKey);
 
     cout << std::endl << std::endl;
-	return _getch() == acceptKey;
+	return key == acceptKey;
+}
+
+bool keyPressed()
+{
+    termios oldTerm{};
+    termios newTerm{};
+    tcgetattr(STDIN_FILENO, &oldTerm);
+    newTerm = oldTerm;
+    newTerm.c_lflag &= static_cast<tcflag_t>(~(ICANON | ECHO));
+    tcsetattr(STDIN_FILENO, TCSANOW, &newTerm);
+
+    timeval timeout{};
+    fd_set readSet;
+    FD_ZERO(&readSet);
+    FD_SET(STDIN_FILENO, &readSet);
+    int result = select(STDIN_FILENO + 1, &readSet, nullptr, nullptr, &timeout);
+
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldTerm);
+    return result > 0;
+}
+
+char readKey()
+{
+    char key = '\0';
+    termios oldTerm{};
+    termios newTerm{};
+    tcgetattr(STDIN_FILENO, &oldTerm);
+    newTerm = oldTerm;
+    newTerm.c_lflag &= static_cast<tcflag_t>(~(ICANON | ECHO));
+    tcsetattr(STDIN_FILENO, TCSANOW, &newTerm);
+    read(STDIN_FILENO, &key, 1);
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldTerm);
+    return key;
 }

@@ -1,6 +1,8 @@
 ﻿#ifndef JETTYAI_H
 #define JETTYAI_H
 
+#include <vector>
+
 #include <torch/torch.h>
 
 using torch::Tensor;

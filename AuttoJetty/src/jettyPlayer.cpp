@@ -4,6 +4,16 @@
 
 #include "../include/jettyPlayer.h"
 
+#include <algorithm>
+#include <chrono>
+#include <cstdlib>
+#include <iostream>
+#include <unistd.h>
+
+#include <X11/Xlib.h>
+#include <X11/keysym.h>
+#include <X11/extensions/XTest.h>
+
 JettyPlayer::JettyPlayer(int width, int height, bool train, bool save, bool restore)
 	: frameWidth(width), frameHeight(height), trainAI(train), saveAI(save), previousLives(3)
 {
@@ -225,19 +235,8 @@ int JettyPlayer::getStableLives(int currentLives)
 
 int JettyPlayer::getScoreFromFrame(cv::Mat stateFrame)
 {
-	// Assume cropped region contains the score text
-	cv::Rect scoreRegion(...); // ← define this rectangle manually
-	cv::Mat scoreCrop = stateFrame(scoreRegion);
-
-	// Preprocess: grayscale + threshold
-	cv::Mat gray;
-	cv::cvtColor(scoreCrop, gray, cv::COLOR_BGR2GRAY);
-	cv::threshold(gray, gray, 200, 255, cv::THRESH_BINARY);
-
-	// Use OCR (Tesseract or other) — for now fake it:
-	// return fakeScore;
-
-	// You can use tesseract or template-matching to read the digits
+	(void)stateFrame;
+	return previousScore;
 }
 
 void JettyPlayer::decideNextMove(Rect& gap, Rect& boot)
@@ -260,20 +259,27 @@ void JettyPlayer::decideNextMove(Rect& gap, Rect& boot)
 void JettyPlayer::sendJump(int releaseDelay)
 {
 	std::thread([releaseDelay]() {
-		INPUT input = { 0 };
-		input.type = INPUT_KEYBOARD;
-		input.ki.wVk = 0x45; // E Key
-		SendInput(1, &input, sizeof(INPUT));
-		Sleep(releaseDelay / 3);
-		input.ki.dwFlags = KEYEVENTF_KEYUP;
-		SendInput(1, &input, sizeof(INPUT));
-		}).detach();
+		Display* display = XOpenDisplay(nullptr);
+		if (!display)
+		{
+			std::cerr << "Failed to open X11 display for key injection." << std::endl;
+			return;
+		}
+
+		KeyCode key = XKeysymToKeycode(display, XK_e);
+		XTestFakeKeyEvent(display, key, True, CurrentTime);
+		XFlush(display);
+		usleep(static_cast<useconds_t>(std::max(releaseDelay / 3, 0) * 1000));
+		XTestFakeKeyEvent(display, key, False, CurrentTime);
+		XFlush(display);
+		XCloseDisplay(display);
+	}).detach();
 }
 
 
 Mat JettyPlayer::extractBoot(Mat frame)
 {
-	// Convert to windows color
+	// Convert to grayscale.
 	cv::Mat hsv;
 	cv::cvtColor(frame.clone(), hsv, cv::COLOR_BGR2GRAY);
 
@@ -345,10 +351,5 @@ void JettyPlayer::drawPreview(Mat gameFrame, Mat stateFrame, Rect boot, vector<R
 
 void makeWindowAlwaysOnTop(const std::string& windowName)
 {
-	HWND hwnd = FindWindowA(NULL, windowName.c_str());
-	if (hwnd != nullptr)
-	{
-		SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
-			SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-	}
+	(void)windowName;
 }

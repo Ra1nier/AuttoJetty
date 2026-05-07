@@ -5,10 +5,10 @@
 #ifndef FRAMECAPTURE_H
 #define FRAMECAPTURE_H
 
-#include <windows.h>
 #include <iostream>
-#include <conio.h>
 #include <tuple>
+
+#include <X11/Xlib.h>
 
 #include "opencv2/opencv.hpp"
 
@@ -21,18 +21,18 @@ class FrameCapture
 private:
     int x, y = 0;
     int stateX, stateY = 0;
-	int overX, overY = 0;
+    Display* display = nullptr;
+    Window rootWindow = 0;
 
     void drawOverlay();
 
     Mat captureGameFrame();
     Mat captureGameState();
-    Mat captureGameOver();
+    Mat captureRegion(int captureX, int captureY, int captureWidth, int captureHeight);
 
 public:
     int width, height = 0;
     int stateWidth, stateHeight = 0;
-    int overHeight, overWidth = 0;
 
     /**
      * Constructor for the FrameCapture Class.

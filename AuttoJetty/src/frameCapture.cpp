@@ -1,12 +1,100 @@
 #include "../include/frameCapture.h"
 
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
+#include <vector>
+
+#include <X11/Xatom.h>
+#include <X11/Xutil.h>
+
 int overlayX, overlayY, overlayWidth, overlayHeight;
 int stateOverlayX, stateOverlayY, stateOverlayWidth, stateOverlayHeight;
 
-FrameCapture::FrameCapture(int x = 0, int y = 0, int width = 0, int height = 0)
-    : x(x), y(y), width(width), height(height) {}
+namespace
+{
+constexpr int BorderThickness = 5;
 
-FrameCapture::~FrameCapture() {}
+void setAlwaysOnTop(Display* display, Window window)
+{
+    Atom wmState = XInternAtom(display, "_NET_WM_STATE", False);
+    Atom above = XInternAtom(display, "_NET_WM_STATE_ABOVE", False);
+
+    XClientMessageEvent event{};
+    event.type = ClientMessage;
+    event.window = window;
+    event.message_type = wmState;
+    event.format = 32;
+    event.data.l[0] = 1;
+    event.data.l[1] = static_cast<long>(above);
+
+    XSendEvent(
+        display,
+        DefaultRootWindow(display),
+        False,
+        SubstructureRedirectMask | SubstructureNotifyMask,
+        reinterpret_cast<XEvent*>(&event));
+}
+
+Window createOverlayBar(Display* display, int x, int y, int width, int height)
+{
+    int screen = DefaultScreen(display);
+    Window root = RootWindow(display, screen);
+
+    XSetWindowAttributes attrs{};
+    attrs.override_redirect = True;
+    attrs.background_pixel = 0xff8000;
+
+    Window window = XCreateWindow(
+        display,
+        root,
+        x,
+        y,
+        std::max(width, 1),
+        std::max(height, 1),
+        0,
+        CopyFromParent,
+        InputOutput,
+        CopyFromParent,
+        CWOverrideRedirect | CWBackPixel,
+        &attrs);
+
+    XMapRaised(display, window);
+    setAlwaysOnTop(display, window);
+    return window;
+}
+
+std::vector<Window> createOverlayWindow(Display* display, int x, int y, int width, int height)
+{
+    return {
+        createOverlayBar(display, x, y, width, BorderThickness),
+        createOverlayBar(display, x, y + height - BorderThickness, width, BorderThickness),
+        createOverlayBar(display, x, y, BorderThickness, height),
+        createOverlayBar(display, x + width - BorderThickness, y, BorderThickness, height)
+    };
+}
+}
+
+FrameCapture::FrameCapture(int x, int y, int width, int height)
+    : x(x), y(y), width(width), height(height)
+{
+    display = XOpenDisplay(nullptr);
+    if (!display)
+    {
+        std::cerr << "Failed to open X11 display. Make sure DISPLAY is set and you are running under X11/XWayland." << std::endl;
+        std::exit(1);
+    }
+
+    rootWindow = DefaultRootWindow(display);
+}
+
+FrameCapture::~FrameCapture()
+{
+    if (display)
+    {
+        XCloseDisplay(display);
+    }
+}
 
 tuple<Mat, Mat> FrameCapture::captureFrame()
 {
@@ -15,53 +103,43 @@ tuple<Mat, Mat> FrameCapture::captureFrame()
 
 Mat FrameCapture::captureGameFrame()
 {
-    HDC hdcScreen = GetDC(nullptr);
-    HDC hdcMem = CreateCompatibleDC(hdcScreen);
-    HBITMAP hbmScreen = CreateCompatibleBitmap(hdcScreen, width, height);
-    SelectObject(hdcMem, hbmScreen);
-
-    // Capture screen at correct coordinates
-    BitBlt(hdcMem, 0, 0, width, height, hdcScreen, x, y, SRCCOPY);
-
-    // Convert to OpenCV Mat
-    BITMAP bmp;
-    GetObject(hbmScreen, sizeof(BITMAP), &bmp);
-    cv::Mat mat(bmp.bmHeight, bmp.bmWidth, CV_8UC4);
-    GetBitmapBits(hbmScreen, bmp.bmHeight * bmp.bmWidth * 4, mat.data);
-
-    // Clean up
-    DeleteObject(hbmScreen);
-    DeleteDC(hdcMem);
-    ReleaseDC(nullptr, hdcScreen);
-
-	return mat;
+    return captureRegion(x, y, width, height);
 }
 
 Mat FrameCapture::captureGameState()
 {
-    HDC hdcScreen = GetDC(nullptr);
-    HDC hdcMem = CreateCompatibleDC(hdcScreen);
-    HBITMAP hbmScreen = CreateCompatibleBitmap(hdcScreen, stateWidth, stateHeight);
-    SelectObject(hdcMem, hbmScreen);
-
-    // Capture screen at correct coordinates
-    BitBlt(hdcMem, 0, 0, stateWidth, stateHeight, hdcScreen, stateX, stateY, SRCCOPY);
-
-    // Convert to OpenCV Mat
-    BITMAP bmp;
-    GetObject(hbmScreen, sizeof(BITMAP), &bmp);
-    cv::Mat mat(bmp.bmHeight, bmp.bmWidth, CV_8UC4);
-    GetBitmapBits(hbmScreen, bmp.bmHeight * bmp.bmWidth * 4, mat.data);
-
-    // Clean up
-    DeleteObject(hbmScreen);
-    DeleteDC(hdcMem);
-    ReleaseDC(nullptr, hdcScreen);
-
-    return mat;
+    return captureRegion(stateX, stateY, stateWidth, stateHeight);
 }
 
-// TODO: ALL of this code is obviously only relevant to my display and needs to be updated to using some sort of scaling based on the display. 
+Mat FrameCapture::captureRegion(int captureX, int captureY, int captureWidth, int captureHeight)
+{
+    if (!display || captureWidth <= 0 || captureHeight <= 0)
+    {
+        return {};
+    }
+
+    XImage* image = XGetImage(
+        display,
+        rootWindow,
+        captureX,
+        captureY,
+        static_cast<unsigned int>(captureWidth),
+        static_cast<unsigned int>(captureHeight),
+        AllPlanes,
+        ZPixmap);
+
+    if (!image)
+    {
+        return {};
+    }
+
+    cv::Mat bgra(image->height, image->width, CV_8UC4, image->data);
+    cv::Mat frame = bgra.clone();
+    XDestroyImage(image);
+    return frame;
+}
+
+// TODO: ALL of this code is obviously only relevant to my display and needs to be updated to using some sort of scaling based on the display.
 void FrameCapture::setUpCaptureFrame()
 {
     // Main capture region.
@@ -71,137 +149,47 @@ void FrameCapture::setUpCaptureFrame()
     overlayY = y;
 
     // State capture region.
-	stateWidth = width / 4;
-	stateHeight = height / 9;
-	stateOverlayWidth = stateWidth;
-	stateOverlayHeight = stateHeight;
-	stateX = x + 100;
-	stateY = y - 50;
-	stateOverlayX = stateX;
-	stateOverlayY = stateY;
+    stateWidth = width / 4;
+    stateHeight = height / 9;
+    stateOverlayWidth = stateWidth;
+    stateOverlayHeight = stateHeight;
+    stateX = x + 100;
+    stateY = y - 50;
+    stateOverlayX = stateX;
+    stateOverlayY = stateY;
 
     drawOverlay();
 }
 
-
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-    int borderThickness = 5;
-
-    switch (uMsg)
-    {
-        case WM_PAINT:
-        {
-            PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hwnd, &ps);
-            HBRUSH hBrush = CreateSolidBrush(RGB(255, 128, 0));
-
-            RECT rect;
-            rect = {0, 0, overlayWidth, borderThickness}; FillRect(hdc, &rect, hBrush);  // Top
-            rect = {0, overlayHeight - borderThickness, overlayWidth, overlayHeight}; FillRect(hdc, &rect, hBrush); // Bottom
-            rect = {0, 0, borderThickness, overlayHeight}; FillRect(hdc, &rect, hBrush); // Left
-            rect = { overlayWidth - borderThickness, 0, overlayWidth, overlayHeight}; FillRect(hdc, &rect, hBrush); // Right
-
-            DeleteObject(hBrush);
-            EndPaint(hwnd, &ps);
-        }
-        return 0;
-
-        case WM_CLOSE:
-            DestroyWindow(hwnd);
-        return 0;
-
-        case WM_DESTROY:
-            PostQuitMessage(0);
-        return 0;
-    }
-    return DefWindowProc(hwnd, uMsg, wParam, lParam);
-}
-
 void FrameCapture::drawOverlay()
 {
-    SetProcessDPIAware();
-
-    LPCWSTR CLASS_NAME = L"TransparentOverlay";
-    WNDCLASS wc = {};
-    wc.lpfnWndProc = WindowProc;
-    wc.hInstance = GetModuleHandle(NULL);
-    wc.lpszClassName = CLASS_NAME;
-    RegisterClass(&wc);
-
-    HWND hwnd = CreateWindowEx(
-        WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TRANSPARENT,
-        CLASS_NAME,
-        L"Overlay Window",
-        WS_POPUP,
-        overlayX, overlayY, overlayWidth, overlayHeight,
-        NULL, NULL, GetModuleHandle(NULL), NULL);
-
-
-    if (!hwnd)
+    if (!display)
     {
-        MessageBox(NULL, L"Failed to create overlay window!", L"Error", MB_OK);
         return;
     }
 
-    SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 255, LWA_COLORKEY);
-    ShowWindow(hwnd, SW_SHOW);
+    std::vector<Window> gameOverlay = createOverlayWindow(display, overlayX, overlayY, overlayWidth, overlayHeight);
+    std::vector<Window> stateOverlay = createOverlayWindow(display, stateOverlayX, stateOverlayY, stateOverlayWidth, stateOverlayHeight);
+    XFlush(display);
 
-    HWND stateHwnd = CreateWindowEx(
-        WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TRANSPARENT,
-        CLASS_NAME,
-        L"State Overlay Window",
-        WS_POPUP,
-        stateOverlayX, stateOverlayY, stateOverlayWidth, stateOverlayHeight,
-        NULL, NULL, GetModuleHandle(NULL), NULL);
+    cout << "Orange boxes displayed. Please align JettBoot inside the orange frame, then press 'G' and Enter to start AutoJetty." << std::endl;
 
-    if (!stateHwnd)
+    char key = '\0';
+    while (key != 'g')
     {
-        MessageBox(NULL, L"Failed to create state overlay window!", L"Error", MB_OK);
-        return;
+        std::cin >> key;
+        key = static_cast<char>(std::tolower(static_cast<unsigned char>(key)));
     }
 
-    SetLayeredWindowAttributes(stateHwnd, RGB(0, 0, 0), 255, LWA_COLORKEY);
-    ShowWindow(stateHwnd, SW_SHOW);
-
-    HWND overHwnd = CreateWindowEx(
-        WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TRANSPARENT,
-        CLASS_NAME,
-        L"Game Over Overlay Window",
-        WS_POPUP,
-        overX, overY, overWidth, overHeight,
-        NULL, NULL, GetModuleHandle(NULL), NULL);
-
-    if (!overHwnd)
+    for (Window window : gameOverlay)
     {
-        MessageBox(NULL, L"Failed to create game over overlay window!", L"Error", MB_OK);
-        return;
+        XDestroyWindow(display, window);
     }
-
-    SetLayeredWindowAttributes(overHwnd, RGB(0, 0, 0), 255, LWA_COLORKEY);
-    ShowWindow(overHwnd, SW_SHOW);
-
-    cout << "Orange box displayed. Please align JettBoot inside the orange frame, then press 'G' to start AutoJetty." << std::endl;
-    bool start = false;
-    MSG msg = {};
-
-    while (!start)
+    for (Window window : stateOverlay)
     {
-        while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
-        {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-            if (msg.message == WM_QUIT) return;
-        }
-
-        if (_kbhit())
-        {
-            char keyPressed = _getch();
-            if (keyPressed == 'g')
-            {
-                cout << "Starting..." << std::endl;
-                start = true;
-            }
-        }
+        XDestroyWindow(display, window);
     }
+    XFlush(display);
+
+    cout << "Starting..." << std::endl;
 }

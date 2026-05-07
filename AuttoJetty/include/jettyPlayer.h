@@ -5,9 +5,9 @@
 #ifndef JETTYPLAYER_H
 #define JETTYPLAYER_H
 
-#include <windows.h>
 #include <vector>
 #include <thread>
+#include <chrono>
 #include <opencv2/highgui.hpp>
 
 #include "opencv2/opencv.hpp"
@@ -72,7 +72,7 @@ private:
     void decideNextMove(Rect& gap, Rect& boot);
 
     /**
-     * Sends the E Key to windows in order to jump the jet boot.
+     * Sends the E key through X11 in order to jump the jet boot.
      *
      * @param releaseDelay Delay in milliseconds to release the key press.
      */
