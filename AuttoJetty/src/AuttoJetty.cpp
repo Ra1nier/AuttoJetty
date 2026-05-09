@@ -4,133 +4,169 @@
 
 #include <iostream>
 #include <cctype>
-#include <cstdlib>
+#include <memory>
 #include <termios.h>
 #include <unistd.h>
 #include <sys/select.h>
 
-#include <X11/Xlib.h>
-
-#include "opencv2/opencv.hpp"
 #include "../include/frameCapture.h"
 #include "../include/jettyPlayer.h"
 
-using cv::Mat;
 using std::cout;
 using std::string;
 
-// Func Declarations
+// Startup mode determines which decision system drives jumps.
+enum class RunMode
+{
+    Controller,
+    AI
+};
+
+// Function declarations keep main readable while the helper bodies live below.
 void getScreenDimensions();
 void requestUserSettings();
-bool displayRequest(string message, char acceptKey, char rejectKey);
+RunMode requestRunMode();
+bool requestYesNo(const string& message);
 bool keyPressed();
 char readKey();
 
-// System vals
+// Capture geometry is initialized from the user-provided screen size.
 int x = 0, y = 0;
 int width = 0, height = 0;
 int screenWidth = 0, screenHeight = 0;
-JettyPlayer* player = nullptr;
-FrameCapture* frames = nullptr;
 
-// User Settings
+// Player settings are filled in by requestUserSettings().
+RunMode runMode = RunMode::Controller;
 bool trainBot = false;
 bool saveBot = false;
 bool restoreBot = false;
 
 int main()
 {
-    // Screen Setup
+    // Ask for screen size first because the default capture region is derived from it.
     getScreenDimensions();
 
     width = screenWidth / 3;
-    height = (screenHeight * 4) / 11; // Scale randomly chosen but it works lol
+    height = (screenHeight * 4) / 11;
     x = (screenWidth - width) / 2;
     y = (screenHeight - height) / 2;
 
 	requestUserSettings();
 
-    // Start JettyPlayer
-    player = new JettyPlayer(width, height, trainBot, saveBot, restoreBot);
-    frames = new FrameCapture(x, y, width, height);
+    // JettyPlayer handles CV, decision making, and key presses; FrameCapture owns screen capture.
+    auto player = std::make_unique<JettyPlayer>(
+        height,
+        runMode == RunMode::AI,
+        trainBot,
+        saveBot,
+        restoreBot);
+    auto frames = std::make_unique<FrameCapture>(x, y, width, height);
     frames->setUpCaptureFrame();
 
     while (true)
     {
-        // Capture frame
+        // Each loop captures the game area plus the state/lives area, then processes one frame.
         auto [gameFrame, stateFrame] = frames->captureFrame();
         if (gameFrame.empty() || stateFrame.empty())
         {
             break;
         }
 
-        // Send the frame to the player
         player->sendFrame(gameFrame, stateFrame);
 
-        // Exit app on Q
+        // Non-blocking keyboard handling lets Q exit and J send a manual test jump.
         if (keyPressed())
         {
-            if (readKey() == 'q')
+            char key = readKey();
+            if (key == 'q')
             {
                 cout << "Exiting..." << std::endl;
                 break;
             }
+            if (key == 'j')
+            {
+                player->testJump();
+            }
         }
     }
 
-    // Clean up and end
-    delete frames;
-    delete player;
+    cv::destroyAllWindows();
     return 0;
 }
 
 void getScreenDimensions()
 {
-    Display* display = XOpenDisplay(nullptr);
-    if (!display)
-    {
-        std::cerr << "Failed to open X11 display. Make sure DISPLAY is set and you are running under X11/XWayland." << std::endl;
-        std::exit(1);
-    }
+    // Wayland screen capture does not expose one universal global size, so ask once at startup.
+    cout << "Wayland does not provide a standard global screen size API for this use case." << std::endl;
+    cout << "Enter your screen width [1920]: ";
+    string input;
+    std::getline(std::cin >> std::ws, input);
+    screenWidth = input.empty() ? 1920 : std::stoi(input);
 
-    int screen = DefaultScreen(display);
-    screenWidth = DisplayWidth(display, screen);
-    screenHeight = DisplayHeight(display, screen);
-    XCloseDisplay(display);
+    cout << "Enter your screen height [1080]: ";
+    std::getline(std::cin >> std::ws, input);
+    screenHeight = input.empty() ? 1080 : std::stoi(input);
 
     cout << "Screen Resolution: " << screenWidth << "," << screenHeight << "\n";
 }
 
 void requestUserSettings()
 {
-	cout << "Welcome to AutoJetty!\nBefore we start lets get JettyBot configured for this run.\n\n";
+	cout << "Welcome to AuttoJetty.\n\n";
 
-    trainBot = displayRequest("Do you want to train the AI? (y/n): ", 'y', 'n');
-    if (trainBot)
+    runMode = requestRunMode();
+    trainBot = false;
+    saveBot = false;
+    restoreBot = false;
+
+    if (runMode == RunMode::AI)
     {
-        saveBot = displayRequest("Do you want this AI training run saved? (y/n): ", 'y', 'n');
+        restoreBot = requestYesNo("Load the saved AI policy before starting? (y/n): ");
+        trainBot = requestYesNo("Train the AI during this run? (y/n): ");
+        if (trainBot)
+        {
+            saveBot = requestYesNo("Save the AI policy when training ends? (y/n): ");
+        }
     }
-    restoreBot = displayRequest("Do you want to restore the most recent version of the AI? (y/n): ", 'y', 'n');
 
-    cout << "All done! JettyBot is now configured and AuttoJetty will now start.\n\n";
+    cout << "\nMode: " << (runMode == RunMode::AI ? "AI" : "Controller") << std::endl;
+    cout << "Controls while running: q=quit, j=test jump.\n\n";
 }
 
-bool displayRequest(string message, char acceptKey, char rejectKey)
+RunMode requestRunMode()
 {
+    // Force one explicit mode choice so controller runs are not interrupted by AI-only questions.
     char key = '\0';
     do
     {
-        cout << message << std::endl;
+        cout << "Select decision mode:" << std::endl;
+        cout << "  c = Controller" << std::endl;
+        cout << "  a = AI" << std::endl;
+        cout << "Mode (c/a): ";
         std::cin >> key;
         key = static_cast<char>(std::tolower(static_cast<unsigned char>(key)));
-    } while (key != acceptKey && key != rejectKey);
+    } while (key != 'c' && key != 'a');
 
-    cout << std::endl << std::endl;
-	return key == acceptKey;
+    return key == 'a' ? RunMode::AI : RunMode::Controller;
+}
+
+bool requestYesNo(const string& message)
+{
+    // Normalize Y/N input so callers only deal with booleans.
+    char key = '\0';
+    do
+    {
+        cout << message;
+        std::cin >> key;
+        key = static_cast<char>(std::tolower(static_cast<unsigned char>(key)));
+    } while (key != 'y' && key != 'n');
+
+	return key == 'y';
 }
 
 bool keyPressed()
 {
+    // Temporarily put stdin in non-canonical mode so select() can poll without blocking.
     termios oldTerm{};
     termios newTerm{};
     tcgetattr(STDIN_FILENO, &oldTerm);
@@ -150,6 +186,7 @@ bool keyPressed()
 
 char readKey()
 {
+    // Read one keypress without waiting for Enter and restore the terminal immediately after.
     char key = '\0';
     termios oldTerm{};
     termios newTerm{};

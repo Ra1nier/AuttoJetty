@@ -1,0 +1,26 @@
+[
+{
+  "directory": "/home/max/Source/AuttoJetty/build",
+  "command": "/usr/bin/c++ -DUSE_C10D_GLOO -DUSE_C10D_NCCL -DUSE_DISTRIBUTED -DUSE_RPC -DUSE_TENSORPIPE -I/home/max/Source/AuttoJetty/AuttoJetty/include -I/usr/include/gio-unix-2.0 -I/usr/include/pipewire-0.3 -I/usr/include/spa-0.2 -I/usr/include/libmount -I/usr/include/blkid -I/usr/include/glib-2.0 -I/usr/lib64/glib-2.0/include -I/usr/include/sysprof-6 -isystem /usr/include/opencv4 -isystem /home/max/Source/SDKs/libtorch/include -isystem /home/max/Source/SDKs/libtorch/include/torch/csrc/api/include -isystem /usr/local/cuda/include -std=c++17 -D_REENTRANT -DWITH_GZFILEOP -pthread -o CMakeFiles/AuttoJetty.dir/AuttoJetty/src/AuttoJetty.cpp.o -c /home/max/Source/AuttoJetty/AuttoJetty/src/AuttoJetty.cpp",
+  "file": "/home/max/Source/AuttoJetty/AuttoJetty/src/AuttoJetty.cpp",
+  "output": "CMakeFiles/AuttoJetty.dir/AuttoJetty/src/AuttoJetty.cpp.o"
+},
+{
+  "directory": "/home/max/Source/AuttoJetty/build",
+  "command": "/usr/bin/c++ -DUSE_C10D_GLOO -DUSE_C10D_NCCL -DUSE_DISTRIBUTED -DUSE_RPC -DUSE_TENSORPIPE -I/home/max/Source/AuttoJetty/AuttoJetty/include -I/usr/include/gio-unix-2.0 -I/usr/include/pipewire-0.3 -I/usr/include/spa-0.2 -I/usr/include/libmount -I/usr/include/blkid -I/usr/include/glib-2.0 -I/usr/lib64/glib-2.0/include -I/usr/include/sysprof-6 -isystem /usr/include/opencv4 -isystem /home/max/Source/SDKs/libtorch/include -isystem /home/max/Source/SDKs/libtorch/include/torch/csrc/api/include -isystem /usr/local/cuda/include -std=c++17 -D_REENTRANT -DWITH_GZFILEOP -pthread -o CMakeFiles/AuttoJetty.dir/AuttoJetty/src/frameCapture.cpp.o -c /home/max/Source/AuttoJetty/AuttoJetty/src/frameCapture.cpp",
+  "file": "/home/max/Source/AuttoJetty/AuttoJetty/src/frameCapture.cpp",
+  "output": "CMakeFiles/AuttoJetty.dir/AuttoJetty/src/frameCapture.cpp.o"
+},
+{
+  "directory": "/home/max/Source/AuttoJetty/build",
+  "command": "/usr/bin/c++ -DUSE_C10D_GLOO -DUSE_C10D_NCCL -DUSE_DISTRIBUTED -DUSE_RPC -DUSE_TENSORPIPE -I/home/max/Source/AuttoJetty/AuttoJetty/include -I/usr/include/gio-unix-2.0 -I/usr/include/pipewire-0.3 -I/usr/include/spa-0.2 -I/usr/include/libmount -I/usr/include/blkid -I/usr/include/glib-2.0 -I/usr/lib64/glib-2.0/include -I/usr/include/sysprof-6 -isystem /usr/include/opencv4 -isystem /home/max/Source/SDKs/libtorch/include -isystem /home/max/Source/SDKs/libtorch/include/torch/csrc/api/include -isystem /usr/local/cuda/include -std=c++17 -D_REENTRANT -DWITH_GZFILEOP -pthread -o CMakeFiles/AuttoJetty.dir/AuttoJetty/src/jettyAI.cpp.o -c /home/max/Source/AuttoJetty/AuttoJetty/src/jettyAI.cpp",
+  "file": "/home/max/Source/AuttoJetty/AuttoJetty/src/jettyAI.cpp",
+  "output": "CMakeFiles/AuttoJetty.dir/AuttoJetty/src/jettyAI.cpp.o"
+},
+{
+  "directory": "/home/max/Source/AuttoJetty/build",
+  "command": "/usr/bin/c++ -DUSE_C10D_GLOO -DUSE_C10D_NCCL -DUSE_DISTRIBUTED -DUSE_RPC -DUSE_TENSORPIPE -I/home/max/Source/AuttoJetty/AuttoJetty/include -I/usr/include/gio-unix-2.0 -I/usr/include/pipewire-0.3 -I/usr/include/spa-0.2 -I/usr/include/libmount -I/usr/include/blkid -I/usr/include/glib-2.0 -I/usr/lib64/glib-2.0/include -I/usr/include/sysprof-6 -isystem /usr/include/opencv4 -isystem /home/max/Source/SDKs/libtorch/include -isystem /home/max/Source/SDKs/libtorch/include/torch/csrc/api/include -isystem /usr/local/cuda/include -std=c++17 -D_REENTRANT -DWITH_GZFILEOP -pthread -o CMakeFiles/AuttoJetty.dir/AuttoJetty/src/jettyPlayer.cpp.o -c /home/max/Source/AuttoJetty/AuttoJetty/src/jettyPlayer.cpp",
+  "file": "/home/max/Source/AuttoJetty/AuttoJetty/src/jettyPlayer.cpp",
+  "output": "CMakeFiles/AuttoJetty.dir/AuttoJetty/src/jettyPlayer.cpp.o"
+}
+]

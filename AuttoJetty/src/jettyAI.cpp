@@ -1,8 +1,8 @@
 ﻿#include "../include/jettyAI.h"
 
-// ----------* AI Model *----------
+#include <iostream>
 
-// JettyAIImpl is a neural network model that takes 4 inputs and outputs a single value that represents a jump in milliseconds.
+// JettyAIImpl is a neural network model that takes 4 normalized inputs and outputs a jump probability.
 JettyAIImpl::JettyAIImpl() : fc1(4, 64), fc2(64, 1)
 {
 	register_module("fc1", fc1);
@@ -13,11 +13,8 @@ JettyAIImpl::JettyAIImpl() : fc1(4, 64), fc2(64, 1)
 Tensor JettyAIImpl::forward(Tensor x)
 {
 	x = torch::relu(fc1->forward(x)); // Turn 4 inputs into 64 tensors
-	x = torch::sigmoid(fc2->forward(x)); // Merge 64 tensors into 1 tensor, the output tensor
-	return x * 200.0f; // Convert output to 0–200ms jump
+	return torch::sigmoid(fc2->forward(x)); // Merge 64 tensors into a 0..1 jump probability
 }
-
-// ----------* JettyBot *----------
 
 // JettyBot is a class that contains the AI model and is used to interact with the JettyAI. Essentially, it is a wrapper for the JettyAI.
 JettyBot::JettyBot(bool train, bool save)
@@ -38,44 +35,76 @@ JettyBot::~JettyBot()
 	}
 }
 
-int JettyBot::getJumpTime(int bootPosition, int gapTop, int gapBottom, float fallSpeed)
+Tensor JettyBot::makeInput(int bootPosition, int gapTop, int gapBottom, float fallSpeed)
 {
-	Tensor input = torch::tensor({ (float)bootPosition, (float)gapTop, (float)gapBottom, fallSpeed }).unsqueeze(0);
+	int gapCenter = gapTop + ((gapBottom - gapTop) / 2);
+	float targetError = static_cast<float>(bootPosition - gapCenter) / 500.0f;
+	float normalizedBoot = static_cast<float>(bootPosition) / 1000.0f;
+	float normalizedGapTop = static_cast<float>(gapTop) / 1000.0f;
+	float normalizedFallSpeed = fallSpeed / 50.0f;
 
-	return trainAI ? train(input) : query(input);
+	return torch::tensor({ normalizedBoot, normalizedGapTop, targetError, normalizedFallSpeed }).unsqueeze(0);
 }
 
-int JettyBot::train(Tensor input)
+bool JettyBot::controllerShouldJump(int bootPosition, int gapTop, int gapBottom, float fallSpeed)
 {
-	Tensor action = model->forward(input);
+	int gapCenter = gapTop + ((gapBottom - gapTop) / 2);
+	int targetY = gapCenter + 8;
+	int error = bootPosition - targetY;
 
-	// Randomize the action to add some noise for training
-	action = action + torch::randn_like(action) * 10.0;
-	action = torch::clamp(action, 0, 200);
-
-	episodes.emplace_back(input.clone(), action.clone());
-
-	return static_cast<int>(action.item<float>());
+	// Positive error means the boot is below the target. Account for downward velocity.
+	return error + static_cast<int>(fallSpeed * 2.0f) > 10;
 }
 
-int JettyBot::query(torch::Tensor input)
+bool JettyBot::shouldJump(int bootPosition, int gapTop, int gapBottom, float fallSpeed)
 {
-	Tensor action = model->forward(input);
-	return static_cast<int>(action.item<float>());
-}
+	Tensor input = makeInput(bootPosition, gapTop, gapBottom, fallSpeed);
+	bool teacherJump = controllerShouldJump(bootPosition, gapTop, gapBottom, fallSpeed);
 
-void JettyBot::generateReward(bool crash)
-{
-	float reward = crash ? -1000.0f : 1.0f;
-	if (!episodes.empty())
+	if (trainAI)
 	{
-		episodes.back().reward = reward;
-		totalReward += reward;
+		return trainJump(input, teacherJump);
 	}
+
+	return queryJump(input);
+}
+
+bool JettyBot::queryJump(Tensor input)
+{
+	torch::NoGradGuard noGrad;
+	Tensor probability = model->forward(input).squeeze();
+	return probability.item<float>() > 0.5f;
+}
+
+bool JettyBot::trainJump(Tensor input, bool teacherJump)
+{
+	// Store the supervised target so later survival/crash rewards can score the episode.
+	Tensor target = torch::tensor({ teacherJump ? 1.0f : 0.0f }).unsqueeze(0);
+	episodes.emplace_back(input.clone(), target.clone());
+
+	Tensor probability = model->forward(input);
+	Tensor loss = torch::binary_cross_entropy(probability, target);
+
+	optimizer->zero_grad();
+	loss.backward();
+	optimizer->step();
+
+	if (torch::rand({ 1 }).item<float>() < 0.05f)
+	{
+		return !teacherJump;
+	}
+
+	return queryJump(input);
 }
 
 void JettyBot::finalizeEpisode()
 {
+	if (episodes.size() < 2 || !optimizer)
+	{
+		reset();
+		return;
+	}
+
 	std::cout << "Episode Reward: " << totalReward << std::endl;
 
 	// Compute discounted rewards
@@ -156,16 +185,18 @@ void JettyBot::reset()
 
 void JettyBot::close()
 {
-	if (trainAI)
-	{
-		torch::save(model, "jettybot_model.pt");
-	}
+	torch::save(model, "jettybot_policy.pt");
 }
 
 void JettyBot::restore()
 {
-	if (trainAI)
+	try
 	{
-		torch::load(model, "jettybot_model.pt");
+		torch::load(model, "jettybot_policy.pt");
+		std::cout << "[AI] Restored jettybot_policy.pt" << std::endl;
+	}
+	catch (const c10::Error& error)
+	{
+		std::cerr << "[AI] Failed to restore jettybot_policy.pt: " << error.what() << std::endl;
 	}
 }
