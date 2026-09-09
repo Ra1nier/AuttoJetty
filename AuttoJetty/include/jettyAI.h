@@ -1,6 +1,7 @@
 ﻿#ifndef JETTYAI_H
 #define JETTYAI_H
 
+#include <memory>
 #include <vector>
 
 #include <torch/torch.h>
@@ -17,18 +18,18 @@ struct JettyAIImpl : torch::nn::Module
     Tensor forward(Tensor x);
 
     torch::nn::Linear fc1{ nullptr }, fc2{ nullptr };
+    Tensor policyVersion;
 };
 
 // Torch module wrapper type for JettyAIImpl.
 TORCH_MODULE(JettyAI);
 
-// One recorded training step with its input state, action output, and reward.
+// One supervised example retained in the bounded training replay buffer.
 struct EpisodeStep
 {
-	EpisodeStep(Tensor state, Tensor action, float reward = 0.0f) : state(state), action(action), reward(reward) {}
+	EpisodeStep(Tensor state, Tensor action) : state(state), action(action) {}
     Tensor state;
     Tensor action;
-    float reward;
 };
 
 // Wraps the model, deterministic teacher controller, training, saving, and loading.
@@ -56,12 +57,13 @@ class JettyBot
 
     private:
         JettyAI model;
-		torch::optim::Adam* optimizer = nullptr;
+		std::unique_ptr<torch::optim::Adam> optimizer;
         vector<EpisodeStep> episodes;
 
         bool trainAI = false;
         bool saveAI = false;
 		float totalReward = 0.0f;
+		size_t trainingSteps = 0;
 
         // Builds the normalized four-value input tensor used by both training and inference.
         Tensor makeInput(int bootPosition, int gapTop, int gapBottom, float fallSpeed);
@@ -69,11 +71,11 @@ class JettyBot
         // Runs the model without modifying weights.
         bool queryJump(Tensor input);
 
-        // Trains one frame against the deterministic controller's decision.
+        // Adds one teacher example, performs a replay-buffer update, and returns the AI action.
         bool trainJump(Tensor input, bool teacherJump);
 
-        // Clears episode reward state after an episode finishes.
-        void reset();
+        // Starts a new policy with a safe decision boundary before online refinement.
+        void initializePolicy();
 
 };
 

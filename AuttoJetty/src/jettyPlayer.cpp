@@ -85,7 +85,7 @@ void emitKeyEvent(int fd, int type, int code, int value)
 }
 
 JettyPlayer::JettyPlayer(int height, bool useAIMode, bool train, bool save, bool restore)
-	: frameHeight(height), useAI(useAIMode), trainAI(train), saveAI(save), previousLives(3)
+	: frameHeight(height), useAI(useAIMode), trainAI(train), saveAI(save)
 {
 	jettyBot = new JettyBot(trainAI, saveAI);
 	runStartTime = std::chrono::steady_clock::now();
@@ -121,7 +121,7 @@ void JettyPlayer::sendFrame(Mat gameFrame, Mat stateFrame)
 	else if (!readyToTrain)
 	{
 		readyToTrain = true;
-		std::cout << "[System] AI training active!" << std::endl;
+		std::cout << "[System] " << (useAI ? "AI" : "Controller") << " active!" << std::endl;
 	}
 
 	// Build binary masks for the objects the controller needs.
@@ -380,7 +380,7 @@ void JettyPlayer::decideNextMove(Rect& gap, Rect& boot)
 
 	// Fall speed is the frame-to-frame change of the corrected boot control point.
 	int bootPositionY = getBootControlY(boot);
-	int fallSpeed = prevBootY > 0 ? std::abs(bootPositionY - prevBootY) : 0;
+	int verticalSpeed = prevBootY > 0 ? bootPositionY - prevBootY : 0;
 	prevBootY = bootPositionY;
 
 	// The controller only needs the top and bottom Y bounds of the chosen gap.
@@ -391,8 +391,8 @@ void JettyPlayer::decideNextMove(Rect& gap, Rect& boot)
 	auto now = std::chrono::steady_clock::now();
 	auto msSinceJump = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastJumpTime).count();
 	bool shouldJump = useAI
-		? jettyBot->shouldJump(bootPositionY, gapTop, gapBottom, fallSpeed)
-		: jettyBot->controllerShouldJump(bootPositionY, gapTop, gapBottom, fallSpeed);
+		? jettyBot->shouldJump(bootPositionY, gapTop, gapBottom, verticalSpeed)
+		: jettyBot->controllerShouldJump(bootPositionY, gapTop, gapBottom, std::abs(verticalSpeed));
 
 	if (shouldJump && msSinceJump > 110)
 	{

@@ -95,6 +95,8 @@ struct PipeWireCapture
     std::mutex frameMutex;
     std::condition_variable frameReady;
     cv::Mat latestFrame;
+    uint64_t frameSequence = 0;
+    uint64_t lastDeliveredSequence = 0;
 
     bool initialize()
     {
@@ -166,12 +168,23 @@ struct PipeWireCapture
     bool getFrame(cv::Mat& frame)
     {
         std::unique_lock<std::mutex> lock(frameMutex);
-        if (!frameReady.wait_for(lock, std::chrono::seconds(3), [&] { return !latestFrame.empty(); }))
+        bool receivedNewFrame = frameReady.wait_for(lock, std::chrono::seconds(3), [&] {
+            return !latestFrame.empty() && frameSequence != lastDeliveredSequence;
+        });
+
+        if (latestFrame.empty())
         {
             return false;
         }
 
+        // Some Wayland compositors only publish a frame when screen content changes.
+        // Reuse the most recent frame after an idle timeout instead of treating an
+        // undamaged desktop as a disconnected capture stream.
         frame = latestFrame.clone();
+        if (receivedNewFrame)
+        {
+            lastDeliveredSequence = frameSequence;
+        }
         return true;
     }
 
@@ -414,6 +427,7 @@ struct PipeWireCapture
         {
             std::lock_guard<std::mutex> lock(self->frameMutex);
             self->latestFrame = bgrFrame.clone();
+            ++self->frameSequence;
         }
         self->frameReady.notify_one();
 
@@ -422,7 +436,7 @@ struct PipeWireCapture
 };
 
 FrameCapture::FrameCapture(int x, int y, int width, int height)
-    : x(x), y(y), width(width), height(height), capture(std::make_unique<PipeWireCapture>())
+    : x(x), y(y), capture(std::make_unique<PipeWireCapture>()), width(width), height(height)
 {
     if (!capture->initialize())
     {

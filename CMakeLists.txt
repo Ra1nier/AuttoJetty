@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.18)
 
 project(AuttoJetty LANGUAGES CXX)
 
+include(GNUInstallDirs)
+
 if (NOT UNIX OR APPLE)
     message(FATAL_ERROR "AuttoJetty is configured for Linux only.")
 endif()
@@ -32,6 +34,9 @@ add_executable(AuttoJetty
 
 target_include_directories(AuttoJetty PRIVATE
     AuttoJetty/include
+)
+
+target_include_directories(AuttoJetty SYSTEM PRIVATE
     ${OpenCV_INCLUDE_DIRS}
     ${PORTAL_PIPEWIRE_INCLUDE_DIRS}
 )
@@ -44,3 +49,15 @@ target_link_libraries(AuttoJetty PRIVATE
 
 target_compile_options(AuttoJetty PRIVATE ${PORTAL_PIPEWIRE_CFLAGS_OTHER})
 target_link_directories(AuttoJetty PRIVATE ${PORTAL_PIPEWIRE_LIBRARY_DIRS})
+
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(AuttoJetty PRIVATE
+        -Wall
+        -Wextra
+        -Wpedantic
+    )
+endif()
+
+install(TARGETS AuttoJetty
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)

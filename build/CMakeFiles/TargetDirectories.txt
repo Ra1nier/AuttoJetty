@@ -1,3 +1,0 @@
-/home/max/Source/AuttoJetty/build/CMakeFiles/AuttoJetty.dir
-/home/max/Source/AuttoJetty/build/CMakeFiles/edit_cache.dir
-/home/max/Source/AuttoJetty/build/CMakeFiles/rebuild_cache.dir
